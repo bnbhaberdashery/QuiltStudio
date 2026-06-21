@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BNB Quilt Mockup Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --navy:#203247;
+  --cream:#f8f2e8;
+  --paper:#fffdf8;
+  --line:#cfc2ae;
+  --ink:#1f2933;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:Arial, sans-serif;}
+header{padding:18px 20px;background:var(--navy);color:white;}
+header h1{margin:0;font-family:Georgia,serif;font-size:26px;letter-spacing:.3px}
+header p{margin:6px 0 0;font-size:13px;opacity:.9}
+main{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px;max-width:1300px;margin:auto}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 2px 9px rgba(0,0,0,.05)}
+h2{font-family:Georgia,serif;font-size:18px;margin:0 0 12px}
+label{display:block;font-size:12px;font-weight:bold;margin:12px 0 5px}
+input,select,button{width:100%;padding:9px;border-radius:8px;border:1px solid #b8ad9c;background:white;font-size:14px}
+button{border:0;background:var(--navy);color:white;font-weight:bold;margin-top:12px;cursor:pointer}
+button.alt{background:#74695d}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fabricRow{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.swatch{width:72px;height:58px;border:1px solid var(--line);border-radius:8px;background:#eee;background-size:cover;background-position:center}
+.small{font-size:12px;line-height:1.45;color:#4b5563}
+#canvasWrap{overflow:auto;text-align:center}
+canvas{max-width:100%;background:white;border:1px solid var(--line);border-radius:10px}
+.results{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.resultBox{background:#f6efe3;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:12px}
+.resultBox b{display:block;font-size:15px;color:var(--navy);margin-bottom:3px}
+@media(max-width:900px){
+  main{grid-template-columns:1fr;padding:12px}
+  header h1{font-size:22px}
+  .results{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>BNB Quilt Mockup Studio</h1>
+  <p>Upload fabrics, choose a layout, generate a quilt diagram, and export a PNG.</p>
+</header>
+
+<main>
+<section class="card">
+  <h2>1. Fabrics</h2>
+
+  <div class="fabricRow">
+    <div id="swatch0" class="swatch"></div>
+    <div><label>Fabric A / Dark</label><input id="file0" type="file" accept="image/*"></div>
+  </div>
+  <div class="fabricRow">
+    <div id="swatch1" class="swatch"></div>
+    <div><label>Fabric B / Medium</label><input id="file1" type="file" accept="image/*"></div>
+  </div>
+  <div class="fabricRow">
+    <div id="swatch2" class="swatch"></div>
+    <div><label>Fabric C / Light</label><input id="file2" type="file" accept="image/*"></div>
+  </div>
+
+  <h2 style="margin-top:20px">2. Quilt Settings</h2>
+  <label>Pattern</label>
+  <select id="pattern">
+    <option value="gingham">3-Fabric Gingham</option>
+    <option value="checker">Simple Checkerboard</option>
+    <option value="irish">Simple Irish Chain</option>
+    <option value="ninepatch">Nine Patch Repeat</option>
+  </select>
+
+  <div class="grid2">
+    <div><label>Squares across</label><input id="cols" type="number" value="10" min="1"></div>
+    <div><label>Squares down</label><input id="rows" type="number" value="15" min="1"></div>
+  </div>
+
+  <div class="grid2">
+    <div><label>Finished square</label><input id="square" type="number" value="5" min="1" step="0.25"></div>
+    <div><label>Border width</label><input id="border" type="number" value="0" min="0" step="0.25"></div>
+  </div>
+
+  <label>Mockup style</label>
+  <select id="style">
+    <option value="diagram">Clean diagram</option>
+    <option value="stitched">Soft stitched mockup</option>
+  </select>
+
+  <button id="generate">Generate Quilt</button>
+  <button class="alt" id="download">Download PNG</button>
+
+  <p class="small" id="status">Ready. Upload fabrics, then generate.</p>
+</section>
+
+<section class="card">
+  <div id="canvasWrap"><canvas id="quilt" width="900" height="1100"></canvas></div>
+  <div class="results">
+    <div class="resultBox"><b id="finishedSize">—</b>Finished centre</div>
+    <div class="resultBox"><b id="squareCount">—</b>Total squares</div>
+    <div class="resultBox"><b id="fabricA">—</b>Fabric A squares</div>
+    <div class="resultBox"><b id="fabricB">—</b>Fabric B squares</div>
+  </div>
+  <p class="small" id="fabricC">Fabric C squares: —</p>
+</section>
+</main>
+
+<script>
+const files=[null,null,null], imgs=[null,null,null];
+const fallbacks=["#203247","#6f6a61","#f1e7d7"];
+
+function status(t){document.getElementById("status").textContent=t}
+
+function loadImage(index){
+  const input=document.getElementById("file"+index);
+  const file=input.files[0];
+  if(!file) return Promise.resolve(null);
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        imgs[index]=img;
+        document.getElementById("swatch"+index).style.backgroundImage=`url("${reader.result}")`;
+        resolve(img);
+      };
+      img.onerror=()=>reject("Image could not load.");
+      img.src=reader.result;
+    };
+    reader.onerror=()=>reject("File could not be read.");
+    reader.readAsDataURL(file);
+  });
+}
+
+function drawFabric(ctx,index,x,y,w,h,stitched){
+  const img=imgs[index];
+  if(img){
+    const scale=Math.max(w/img.width,h/img.height);
+    const iw=img.width*scale, ih=img.height*scale;
+    const ix=x+(w-iw)/2, iy=y+(h-ih)/2;
+    ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+    ctx.drawImage(img,ix,iy,iw,ih);
+    ctx.restore();
+  }else{
+    ctx.fillStyle=fallbacks[index]; ctx.fillRect(x,y,w,h);
+  }
+  ctx.strokeStyle=stitched?"rgba(32,50,71,.28)":"rgba(32,50,71,.55)";
+  ctx.lineWidth=1;
+  ctx.strokeRect(x,y,w,h);
+  if(stitched){
+    ctx.strokeStyle="rgba(255,255,255,.28)";
+    ctx.setLineDash([4,4]);
+    ctx.strokeRect(x+5,y+5,w-10,h-10);
+    ctx.setLineDash([]);
+  }
+}
+
+function patternIndex(pattern,r,c){
+  if(pattern==="gingham"){
+    if(r%2===0) return c%2===0?0:1;
+    return c%2===0?1:2;
+  }
+  if(pattern==="checker") return (r+c)%2===0?0:2;
+  if(pattern==="irish"){
+    return (r%4===1 || c%4===1) ? 0 : ((r+c)%2===0 ? 2 : 1);
+  }
+  if(pattern==="ninepatch"){
+    const rr=r%3, cc=c%3;
+    if(rr===1 && cc===1) return 0;
+    if(rr===cc || rr+cc===2) return 1;
+    return 2;
+  }
+  return 0;
+}
+
+async function generate(){
+  try{
+    status("Loading fabrics…");
+    await Promise.all([loadImage(0),loadImage(1),loadImage(2)]);
+
+    const cols=Math.max(1,parseInt(document.getElementById("cols").value)||10);
+    const rows=Math.max(1,parseInt(document.getElementById("rows").value)||15);
+    const sq=parseFloat(document.getElementById("square").value)||5;
+    const border=parseFloat(document.getElementById("border").value)||0;
+    const pattern=document.getElementById("pattern").value;
+    const stitched=document.getElementById("style").value==="stitched";
+
+    const cell=52, left=74, top=92, legend=220;
+    const gridW=cols*cell, gridH=rows*cell;
+    const canvas=document.getElementById("quilt"), ctx=canvas.getContext("2d");
+    canvas.width=left+gridW+legend;
+    canvas.height=top+gridH+95;
+
+    ctx.fillStyle="#fffdf8"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#203247";
+    ctx.font="bold 28px Georgia";
+    ctx.fillText("Quilt Mockup",left,42);
+    ctx.font="15px Arial";
+    ctx.fillText(`${cols} across × ${rows} down • ${sq}" finished squares`,left,68);
+
+    let counts=[0,0,0];
+
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const idx=patternIndex(pattern,r,c);
+        counts[idx]++;
+        drawFabric(ctx,idx,left+c*cell,top+r*cell,cell,cell,stitched);
+      }
+    }
+
+    ctx.strokeStyle="#203247"; ctx.lineWidth=3; ctx.strokeRect(left,top,gridW,gridH);
+
+    if(border>0){
+      ctx.strokeStyle="#203247"; ctx.lineWidth=12;
+      ctx.strokeRect(left-8,top-8,gridW+16,gridH+16);
+    }
+
+    ctx.fillStyle="#203247"; ctx.font="bold 18px Georgia"; ctx.fillText("Fabric Key",left+gridW+35,top);
+    ["A / Dark","B / Medium","C / Light"].forEach((name,i)=>{
+      const x=left+gridW+35, y=top+28+i*110;
+      drawFabric(ctx,i,x,y,72,72,false);
+      ctx.fillStyle="#203247"; ctx.font="13px Arial"; ctx.fillText(name,x+86,y+41);
+    });
+
+    ctx.font="13px Arial";
+    ctx.fillText("Pattern: "+document.getElementById("pattern").selectedOptions[0].text,left+gridW+35,top+385);
+
+    const finishedW=cols*sq+(border*2), finishedH=rows*sq+(border*2);
+    document.getElementById("finishedSize").textContent=`${finishedW}" × ${finishedH}"`;
+    document.getElementById("squareCount").textContent=cols*rows;
+    document.getElementById("fabricA").textContent=counts[0];
+    document.getElementById("fabricB").textContent=counts[1];
+    document.getElementById("fabricC").textContent=`Fabric C squares: ${counts[2]}`;
+
+    status("Generated. Use Download PNG to save.");
+  }catch(e){
+    status("Error: "+e);
+  }
+}
+
+function download(){
+  const canvas=document.getElementById("quilt");
+  const a=document.createElement("a");
+  a.href=canvas.toDataURL("image/png");
+  a.download="bnb-quilt-mockup.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+[0,1,2].forEach(i=>document.getElementById("file"+i).addEventListener("change",()=>loadImage(i)));
+document.getElementById("generate").addEventListener("click",generate);
+document.getElementById("download").addEventListener("click",download);
+generate();
+</script>
+</body>
+</html>
